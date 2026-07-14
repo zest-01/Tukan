@@ -15,6 +15,8 @@ const int W = 800;
 const int H = 800;
 const float FOV = 90; // in degrees
 
+void bresenham(SDL_Renderer* renderer, Vertex p, Vertex q);
+
 /*
  * Input -> vertex v in NDC coordinates
  * Output -> a new vertex in screen coordinates
@@ -104,6 +106,10 @@ struct Face {
 };
 
 struct Geometry {
+    //virtual void render(SDL_Renderer* renderer){
+    //     std::cout << "ERR: NO RENDER() FUNCTION DEFINED!" << '\n';
+    //};
+    //
     protected:
         std::vector<Face> faces{};
         //
@@ -175,34 +181,40 @@ struct Geometry {
             faces.at(i) = faces.at(i).translate_face(offset_vertex);
          }  
        }
+       //
+       Vertex center = {.w = 1};
+       void setCenter(Vertex v){
+           center.x = v.x;
+           center.y = v.y;
+           center.z = v.z;
+           center.w = v.w;
+       }
 };
 
 struct Cube : Geometry {
     // Overload constructor 
     Cube(std::vector<Face> faces_in) : Geometry(faces_in){};
     Cube(std::vector<Vertex> vts_in) : Geometry(vts_in, 4){};    
-
     //
-    void render(SDL_Renderer* renderer){
-        SDL_SetRenderDrawColor(renderer, 10, 245, 37,SDL_ALPHA_OPAQUE); // Green
+    void render(SDL_Renderer* renderer, int color){
+        switch(color){
+           case 1:
+               SDL_SetRenderDrawColor(renderer, 10, 245, 37,SDL_ALPHA_OPAQUE); // Green
+               break;
+           case 2:
+               SDL_SetRenderDrawColor(renderer, 51, 213, 222,SDL_ALPHA_OPAQUE); // Blue
+               break;
+           default:         
+               SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE); // White
+        }
         
-        /*
-        // project to near plane, then map to screen
-        for(int i = 0 ; i < faces_cp.size() ; i++){
-            for(int j = 0 ; j < faces_cp.at(i).vts.size() ; j++){
-                c.faces.at(i).vts.at(j) = project(c.faces.at(i).vts.at(j), FOV);
-                c.faces.at(i).vts.at(j) =  screen(c.faces.at(i).vts.at(j), W, H);
-                //vts_cp.at(j) = screen(vts_cp.at(j), W, H);
-            };
-        };
-        */
-
         // render the 2 cube faces separately
         for(int i = 0 ; i < faces.size(); i++){
             for(int j = 0 ; j < faces.at(i).vts.size(); j++){
                 Vertex v1 = screen(project(faces.at(i).vts.at(j), FOV), W, H);
                 Vertex v2 = screen(project(faces.at(i).vts.at((j+1) % faces.at(i).vts.size()), FOV), W, H);
-                SDL_RenderLine(renderer, v1.x, v1.y, v2.x, v2.y);
+                // SDL_RenderLine(renderer, v1.x, v1.y, v2.x, v2.y);
+                bresenham(renderer, Vertex{v1.x, v1.y} ,Vertex{v2.x, v2.y});
             }
         }
 
@@ -210,12 +222,104 @@ struct Cube : Geometry {
         for(int i = 0; i < faces.at(0).vts.size(); i++){
             Vertex v1 = screen(project(faces.at(0).vts.at(i), FOV), W, H);
             Vertex v2 = screen(project(faces.at(1).vts.at(i), FOV), W, H);
-            SDL_RenderLine(renderer, v1.x, v1.y, v2.x, v2.y);    
+            //SDL_RenderLine(renderer, v1.x, v1.y, v2.x, v2.y);    
+            bresenham(renderer, Vertex{v1.x, v1.y} ,Vertex{v2.x, v2.y});
         }  
        // 
        //printProperties();
     };
 };
+
+
+
+
+// input in screen coordinates
+void bresenham(SDL_Renderer* renderer, Vertex p, Vertex q){
+  //
+  SDL_SetRenderDrawColor(renderer, 51, 213, 222,SDL_ALPHA_OPAQUE); // Blue
+  SDL_RenderPoint(renderer, p.x, p.y);
+  SDL_RenderPoint(renderer, q.x, q.y);
+  //
+  float dx = p.x - q.x;
+  float dy = p.y - q.y;
+
+  if(abs(dy) < abs(dx)){
+  //
+  int dir = 1;
+  if(q.x < p.x){
+      int tempx = p.x;
+      int tempy = p.y;
+      p.x = q.x;
+      p.y = q.y;
+      q.x = tempx;
+      q.y = tempy;
+      dir = -dir;
+  }
+      
+  //
+  if(dy < 0){
+      dy = -dy;
+      dir = -dir;
+  }
+
+  //
+  if(dx != 0)
+  {
+      dx = abs(dx);
+      float y = p.y;
+      float D = 2*dy - dx;
+      for(int i = 0; i < dx; i++)
+      {
+          SDL_RenderPoint(renderer, p.x + i, y);
+          if(D >= 0){
+              y = y - dir;
+              D = D - 2*dx;
+          }
+          D = D + 2*dy; 
+
+         // std::cout << (p.x + i) << "-" << y << '\n';
+      }
+  }
+  }
+
+  else{
+  //
+  int dir = 1;
+  if(q.y < p.y){
+      int tempx = p.x;
+      int tempy = p.y;
+      p.x = q.x;
+      p.y = q.y;
+      q.x = tempx;
+      q.y = tempy;
+      dir = -dir;
+  }
+      
+  //
+  if(dx < 0){
+      dx = -dx;
+      dir = -dir;
+  }
+
+  //
+  if(dy != 0)
+  {
+      dy = abs(dy);
+      float x = p.x;
+      float D = 2*dx - dy;
+      for(int i = 0; i < dy; i++)
+      {
+          SDL_RenderPoint(renderer, x, p.y + i);
+          if(D >= 0){
+              x = x - dir;
+              D = D - 2*dy;
+          }
+          D = D + 2*dx; 
+
+      }
+  }
+  }
+}
 
 //
 //
@@ -233,80 +337,158 @@ int main(void){
 
 
     /* 
-     *
-     * World coordinates
+     * Objects in scene (World coordinates)
      *
     */
-    const float offset = 0.5;
-    const float base   = 0.5;
-    const Vertex cube_center = Vertex {.x = 0.7, .y = 0.85, .z = 3, .w = 1};
-    // const Vertex cube_center = Vertex {.x = 0, .y = 0, .z = 0, .w = 1};
-    Vertex v1 = {.x =  cube_center.x + base, .y =  cube_center.y + base, .z =  cube_center.z - offset, .w = 1};
-    Vertex v2 = {.x =  cube_center.x - base, .y =  cube_center.y + base, .z =  cube_center.z - offset, .w = 1};
-    Vertex v3 = {.x =  cube_center.x - base, .y =  cube_center.y - base, .z =  cube_center.z - offset, .w = 1};
-    Vertex v4 = {.x =  cube_center.x + base, .y =  cube_center.y - base, .z =  cube_center.z - offset, .w = 1};
-    Vertex v5 = {.x =  cube_center.x + base, .y =  cube_center.y + base, .z =  cube_center.z + offset, .w = 1};
-    Vertex v6 = {.x =  cube_center.x - base, .y =  cube_center.y + base, .z =  cube_center.z + offset, .w = 1};
-    Vertex v7 = {.x =  cube_center.x - base, .y =  cube_center.y - base, .z =  cube_center.z + offset, .w = 1};
-    Vertex v8 = {.x =  cube_center.x + base, .y =  cube_center.y - base, .z =  cube_center.z + offset, .w = 1};
-    const Vertex CAMERA_POS = Vertex {.x = 0, .y = 0, .z = 0, .w = 1}; // camera placed at origin of world coord system for convenience
-
-    /*
-    * vts -> transformations in camera space are applied here
-    * vts_cp -> will be used to store each iterations projected + screen-mapped coordinates for rendering
-    *
-    */
-    Face f1    = std::vector<Vertex> {v1,v2,v3,v4}; 
-    Face f2    = std::vector<Vertex> {v5,v6,v7,v8}; 
-    std::vector<Face> faces = {f1, f2};
+    std::vector<Cube> objects{};
+    float base   = 0.5;
+    float offset = 0.5;
     
-    Face f1_cp    = std::vector<Vertex> {v1,v2,v3,v4}; 
-    Face f2_cp    = std::vector<Vertex> {v5,v6,v7,v8}; 
-    std::vector<Face> faces_cp = {f1_cp, f2_cp};
-    Cube c = Cube(faces_cp); 
-
+    
+    //
+    Vertex cube_center = Vertex {.x = 0.7, .y = 0.85, .z = 3, .w = 1};
+    Cube c1 = Cube(std::vector<Vertex> {
+        Vertex {.x =  cube_center.x + base, .y =  cube_center.y + base, .z =  cube_center.z - offset, .w = 1},
+        Vertex {.x =  cube_center.x - base, .y =  cube_center.y + base, .z =  cube_center.z - offset, .w = 1},
+        Vertex {.x =  cube_center.x - base, .y =  cube_center.y - base, .z =  cube_center.z - offset, .w = 1},
+        Vertex {.x =  cube_center.x + base, .y =  cube_center.y - base, .z =  cube_center.z - offset, .w = 1},
+        Vertex {.x =  cube_center.x + base, .y =  cube_center.y + base, .z =  cube_center.z + offset, .w = 1},
+        Vertex {.x =  cube_center.x - base, .y =  cube_center.y + base, .z =  cube_center.z + offset, .w = 1},
+        Vertex {.x =  cube_center.x - base, .y =  cube_center.y - base, .z =  cube_center.z + offset, .w = 1},
+        Vertex {.x =  cube_center.x + base, .y =  cube_center.y - base, .z =  cube_center.z + offset, .w = 1}
+    });
+    c1.setCenter(cube_center);
+    objects.push_back(c1);
+    
+    
+    cube_center = Vertex {.x = 0.7, .y = 0.85, .z = 3, .w = 1};
+    Cube c2 = Cube(std::vector<Vertex> {
+        Vertex {.x =  cube_center.x + base, .y =  cube_center.y + base, .z =  cube_center.z - offset, .w = 1},
+        Vertex {.x =  cube_center.x - base, .y =  cube_center.y + base, .z =  cube_center.z - offset, .w = 1},
+        Vertex {.x =  cube_center.x - base, .y =  cube_center.y - base, .z =  cube_center.z - offset, .w = 1},
+        Vertex {.x =  cube_center.x + base, .y =  cube_center.y - base, .z =  cube_center.z - offset, .w = 1},
+        Vertex {.x =  cube_center.x + base, .y =  cube_center.y + base, .z =  cube_center.z + offset, .w = 1},
+        Vertex {.x =  cube_center.x - base, .y =  cube_center.y + base, .z =  cube_center.z + offset, .w = 1},
+        Vertex {.x =  cube_center.x - base, .y =  cube_center.y - base, .z =  cube_center.z + offset, .w = 1},
+        Vertex {.x =  cube_center.x + base, .y =  cube_center.y - base, .z =  cube_center.z + offset, .w = 1}
+    });
+    c2.setCenter(cube_center);
+    objects.push_back(c2);
+ 
 
     //
     SDL_Event event;
     bool running = true;
     const float FPS = 60;
     while(running) {
-        // User input
-        while(SDL_PollEvent(&event)){
-            if(event.type == SDL_EVENT_QUIT){
-               running = false;
+            // User input
+            while(SDL_PollEvent(&event)){
+                if(event.type == SDL_EVENT_QUIT){
+                    running = false;
+                }
             }
-        }
    
-        // Reset screen to all black
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0,SDL_ALPHA_OPAQUE); // Black
-        SDL_RenderClear(renderer);
-        //
-        
-        /*
-         * 1. Translate from world space to camera space
-         * 2. Apply transformations in camera space
-         * 3. Translate back to world space
-        */
-        c.translate_geom(Vertex {.x = -cube_center.x, .y = -cube_center.y, .z = -cube_center.z}); 
-        c.rotate_geom(1, X_AXIS);
-        c.rotate_geom(1, Y_AXIS);
-        c.translate_geom(Vertex {.x = cube_center.x, .y = cube_center.y, .z = cube_center.z});
-        
-        /*
-         * All transformations/mutations are done, simply render the vertices
-         */
-        c.printProperties();
-        c.render(renderer);
-        
-        //
-        SDL_RenderPresent(renderer);
-        SDL_Delay(1000 / FPS);
+            // Reset screen to all black
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0,SDL_ALPHA_OPAQUE); // Black
+            SDL_RenderClear(renderer);
+            //
+     
+            // Render scene
+            int i = 0;
+            /*
+             * default white
+             * 0       green
+             * 1       blue
+             *
+             *
+             */
+            int color = -1; // -1 for white (default) 
+            for(Cube &c: objects){  
+                 /*
+                * 1. Translate from world space to camera space
+                * 2. Apply transformations in camera space
+                * 3. Translate back to world space
+                */
+                
+                
+                c.translate_geom(Vertex {.x = -c.center.x, .y = -c.center.y, .z = -c.center.z}); 
+                if(i++ % 2 == 0){
+                  c.rotate_geom(1, X_AXIS);
+                  c.rotate_geom(1,  Z_AXIS);
+                  color = 1;
+                } else{
+                  c.rotate_geom(-1, X_AXIS);
+                  c.rotate_geom(-1, Z_AXIS);
+                  color =2;   
+                }
+                c.translate_geom(Vertex {.x = c.center.x, .y = c.center.y, .z = c.center.z});
+                
+                /*  
+                * All transformations/mutations are done, simply render the vertices
+                */
+                //c.printProperties();
+                c.render(renderer, color);
+                
+
+                // Bresenham test lines
+                /*
+                // Q2 
+                bresenham(renderer, 
+                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
+                        Vertex {.x = 600, .y = 380, .z=1, .w=1}
+                );
+                // Q3
+                bresenham(renderer, 
+                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
+                        Vertex {.x = 600, .y = 420, .z=1, .w=1}
+                );
+                // Q6
+                bresenham(renderer, 
+                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
+                        Vertex {.x = 200, .y = 420, .z=1, .w=1}
+                );
+                // Q7
+                bresenham(renderer, 
+                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
+                        Vertex {.x = 200, .y = 380, .z=1, .w=1}
+                );
+                // Q1
+                bresenham(renderer, 
+                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
+                        Vertex {.x = 420, .y = 200, .z=1, .w=1}
+                );
+                // Q4
+                bresenham(renderer, 
+                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
+                        Vertex {.x = 420, .y = 600, .z=1, .w=1}
+                );
+                // Q5
+                bresenham(renderer, 
+                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
+                        Vertex {.x = 380, .y = 600, .z=1, .w=1}
+                );             
+                // Q8
+                bresenham(renderer, 
+                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
+                        Vertex {.x = 380, .y = 200, .z=1, .w=1}
+                );
+                */
+               
+                
+
+                
+                  
+
+             }
+          //
+          SDL_RenderPresent(renderer);
+          SDL_Delay(1000 / FPS);
     }
 
 
     // cleanup
     SDL_Quit();
     return 0;
+
 
 }

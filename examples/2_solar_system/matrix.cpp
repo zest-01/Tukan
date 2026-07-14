@@ -15,9 +15,10 @@ void printVertices(std::vector<Vertex> vts){
 }
 
 // just a 4 x 4 rotation matrix
+// positive angle for CCW, negative angle for CCWi
 Vertex rot(Vertex v, int angle, int axis){
   float rad = (angle % 360) * PI / 180;
-  
+
   // rotate around y-axis
   switch(axis){
     case X_AXIS:
@@ -27,7 +28,7 @@ Vertex rot(Vertex v, int angle, int axis){
         {0, std::cos(rad), -1*std::sin(rad), 0},
         {0, std::sin(rad),    std::cos(rad), 0},
         {0,           0,                  0, 1}
-      }; 
+      };
       return mul(v, mat);
         break;
        }
