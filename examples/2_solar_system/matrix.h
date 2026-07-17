@@ -5,10 +5,17 @@
 #define PI 3.14159265
 
 struct Vertex {
+    // location
     float x;
     float y;
     float z;
     float w;
+
+    // color
+    float r;
+    float g;
+    float b;
+    float a;
 };
 
 
