@@ -14,6 +14,26 @@ void printVertices(std::vector<Vertex> vts){
     }
 }
 
+
+Vertex Vertex::copy(){
+    return Vertex{
+        .x = x,
+        .y = y,
+        .z = z,
+        .r = r,
+        .g = g,
+        .b = b,
+        .a = a
+    };
+}
+
+void Vertex::printProperties(){
+    std::cout << "----VERTEX PROPERTIES----\n";
+    std::cout << "(x,y,z) = " << x << ", " << y << ", " << z << "" << '\n';  
+    std::cout << "(r,g,b) = " << r << ", " << g << ", " << b << "" << '\n';  
+}
+
+
 // just a 4 x 4 rotation matrix
 // positive angle for CCW, negative angle for CCWi
 Vertex rot(Vertex v, int angle, int axis){
@@ -96,6 +116,11 @@ Vertex mul(Vertex v, float mat[4][4]){
     v_t.y = v.x * mat[1][0] + v.y * mat[1][1] + v.z * mat[1][2] + v.w * mat[1][3];   
     v_t.z = v.x * mat[2][0] + v.y * mat[2][1] + v.z * mat[2][2] + v.w * mat[2][3];   
     v_t.w = v.x * mat[3][0] + v.y * mat[3][1] + v.z * mat[3][2] + v.w * mat[3][3];   
+
+    v_t.r = v.r;
+    v_t.g = v.g;
+    v_t.b = v.b;
+
     //
     return v_t;
 }

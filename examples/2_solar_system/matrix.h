@@ -12,10 +12,20 @@ struct Vertex {
     float w;
 
     // color
-    float r;
-    float g;
-    float b;
+    float r; //= 255;
+    float g; //= 255;
+    float b; //= 255;
     float a;
+
+    // member methods
+    Vertex copy();
+    void printProperties();
+};
+
+struct Color {
+    int r; //= 255;
+    int g; //= 255;
+    int b; //= 255;
 };
 
 

@@ -11,20 +11,36 @@
 #include <math.h>
 #include <utility>
 #include <algorithm>
+#include <cmath>
 
+//
+#define WIREFRAME_MODE  0
+#define LINE_MODE       1
+#define FILL_MODE       2
 
 //
 const Vertex CAMERA_POS = Vertex {.x = 0, .y = 0, .z = 0, .w = 1}; // camera placed at origin of world coord system for convenience
 const int W = 800;
 const int H = 800;
 const float FOV = 90; // in degrees
-std::tuple<float, float, float> COLOR_BUFF[H][W]{};
+std::tuple<int, int, int> COLOR_BUFF[H][W]{};
 float Z_BUFF[H][W]{};
 
 
 std::vector<std::pair<int, int>> bresenham(SDL_Renderer* renderer, Vertex p, Vertex q);
+void printColor(int row, int col);
 
 // only works if the elements are printable
+
+
+
+void reset_Z_BUFF(){
+    for(int row = 0 ; row < H ; row++){
+        for(int col = 0; col < H ; col++){
+            Z_BUFF[row][col] = 255;
+        }
+    }
+}
 
 void printVector(std::vector<int> vctr){
     std::cout << "<";
@@ -34,21 +50,19 @@ void printVector(std::vector<int> vctr){
     std::cout << ">" << '\n';
 };
 
-void printColorBuff(){
+void printColorBuff(bool skipBlack){
     for(int i = 0; i < H; i++){
-        std::cout << "[";
         for(int j = 0; j < W; j++){
-           std::cout 
-               << "{" 
-               << (std::get<0>(COLOR_BUFF[i][j])) 
-               << ','
-               << (std::get<1>(COLOR_BUFF[i][j])) 
-               << ','
-               << (std::get<2>(COLOR_BUFF[i][j])) 
-               << "}"
-               << ',';
+            if(skipBlack
+                && std::get<0>(COLOR_BUFF[i][j]) == 0
+                && std::get<1>(COLOR_BUFF[i][j]) == 0
+                && std::get<2>(COLOR_BUFF[i][j]) == 0
+                )
+            {
+               continue; 
+            }
+            printColor(i,j);
         }
-        std::cout << "]" << '\n';
     }
 };
 
@@ -61,6 +75,8 @@ void printColor(int row, int col){
         << '\n';
 }
 
+//green
+
 
 /*
  * Input -> vertex v in NDC coordinates
@@ -70,7 +86,7 @@ Vertex screen(Vertex v, int W, int H){
   Vertex v_screen = {
       .x = (v.x + 1) * W/2,
       .y = H - ((v.y + 1) * H/2),
-      .z = v.z,
+      .z = v.z, // preserve z for potential depth testing
       .w = v.w,
 
       .r = v.r,
@@ -243,237 +259,280 @@ struct Geometry {
             faces.at(i) = faces.at(i).translate_face(offset_vertex);
          }  
        }
-       //
-       static Geometry createCube(float center, float W){
-           /**
-            Vertex v1 {.x =  center + W, .y =  center + W, .z =  cube_center - W, .w = 1};
-            Vertex v2 {.x =  center + W, .y =  center - W, .z =  cube_center - W, .w = 1};
-            Vertex v3 {.x =  center - W, .y =  center - W, .z =  cube_center - W, .w = 1};
-            Vertex v4 {.x =  center - W, .y =  center + W, .z =  cube_center - W, .w = 1};
-            Face f1 = Face(std::vector<Vertex> {v1,v2,v3,v4});
-            Vertex v5 {.x =  center + W, .y =  center + W, .z =  cube_center + W, .w = 1};
-            Vertex v6 {.x =  center + W, .y =  center - W, .z =  cube_center + W, .w = 1};
-            Vertex v7 {.x =  center - W, .y =  center - W, .z =  cube_center + W, .w = 1};
-            Vertex v8 {.x =  center - W, .y =  center + W, .z =  cube_center + W, .w = 1};
-            Face f2 = Face(std::vector<Vertex> {v5,v6,v7,v8});
-*/
 
-            return Geometry(std::vector<Vertex>{}, 4);
-            
-       }
-    void render(SDL_Renderer* renderer){
+
+    /*
+     * 0 for wireframe -> no depth testing
+     * 1 for interpolation of lines, but no fill -> depth testing, but no fill (i.e., black fill)
+     * 2 for interpolation of lines, and fill
+     */
+    void render(SDL_Renderer* renderer, int mode)
+    {
+      
         
-        
-        // assumes all faces have the same amount of vts associated with them for now
-        for(int i = 0 ; i < faces.size(); i++){
-            int bucketCount = 0;
+        // Assumes all faces have the same amount of vts associated with them for now
+        for(int i = 0 ; i < faces.size(); i++)
+        {
+            //
             int maxY = -1;
-            int minY = H+1;  
-            std::vector<std::pair<int,int>> face_coords{}; 
-            for(int j = 0 ; j < faces.at(i).vts.size(); j++){
+            int minY = H+1;
+            const float z_fight_corr = 0; // doesn't do anything
+            
+            //
+            std::vector<std::tuple<int,int,float, Color>> face_coords{}; 
+            for(int j = 0 ; j < faces.at(i).vts.size(); j++)
+            {
                 
+                // Pixels on line(v1,v2)
                 Vertex v1 = screen(project(faces.at(i).vts.at(j), FOV), W, H);
-                SDL_SetRenderDrawColor(renderer, v1.r, v1.g, v1.b, SDL_ALPHA_OPAQUE);
-                SDL_RenderPoint(renderer, v1.x, v1.y);
-                
                 Vertex v2 = screen(project(faces.at(i).vts.at((j+1) % faces.at(i).vts.size()), FOV), W, H);
-                SDL_SetRenderDrawColor(renderer, v2.r, v2.g, v2.b, SDL_ALPHA_OPAQUE);
-                SDL_RenderPoint(renderer, v2.x, v2.y);
-                
-                //
-                //minY = std::min(minY, std::min(v1.y, v2.y));
-                int curr_min = std::min(v1.y, v2.y); 
-                int curr_max = std::min(v1.y, v2.y); 
-                minY = std::min(minY, curr_min); 
-                maxY = std::max(maxY, curr_max); 
+                std::vector<std::pair<int, int>> pixels = bresenham(renderer, v1, v2);
 
-                std::vector<std::pair<int, int>> coords = bresenham(renderer, v1, v2);
-                //
-                //
-                for(const auto& p : coords){
-                    face_coords.push_back(p);
-                
+                //  z-value and Color used for buffer updates
+                //  minY & maxY used for scanline
+                std::vector<std::tuple<int, int, float, Color>> coords{};
+                for(const std::pair<int,int>& p : pixels){
+                    coords.push_back(std::tuple<int, int, float, Color>{p.first, p.second, 0.0f, Color{}}); // 0 is temporary, to be overwritten 
+                    minY = std::min(minY, p.second);
+                    maxY = std::max(maxY, p.second); 
                 }
-                /*
-                if(v1.x <= v2.x){
-                    face_coords.push_back(std::pair<int, int>{v2.x, v2.y});
-                } else{
-                    face_coords.push_back(std::pair<int, int>{v1.x, v1.y});
-                }
-                */
-               
 
                 //
-                for(float i = 0; i < coords.size(); i++){
-                    const float factor = i / (coords.size() - 1); 
-                   //  std::cout << factor << "~~" << (1 - factor) << '\n';
-                        
-                        // Bresenham could have swapped the role of the vertices
-                        if(v1.x == coords.at(0).first){
-                       /* 
-                       SDL_SetRenderDrawColor(renderer, 
-                            (1-factor) * v1.r + factor * v2.r, 
-                            (1-factor) * v1.g + factor * v2.g, 
-                            (1-factor) * v1.b + factor * v2.b,
-                           SDL_ALPHA_OPAQUE
-                           );
-                         */
+                for(float i = 0; i < coords.size(); i++)
+                {
+                    /*
+                     *
+                     * [3/3 0/3] [2/3 1/3] [1/3 2/3] [ 0/3 3/3]
+                     *
+                     */
+                    const float line_factor = i / (coords.size() - 1);
+                    const auto p = coords.at(i);   
 
-                        const auto p = coords.at(i);  
-                        COLOR_BUFF[p.second][p.first] = std::tuple(
-                                (1-factor) * v1.r + factor * v2.r, 
-                                (1-factor) * v1.g + factor * v2.g, 
-                                (1-factor) * v1.b + factor * v2.b 
-                        );
-                        SDL_SetRenderDrawColor(renderer,
-                                std::get<0>(COLOR_BUFF[p.second][p.first]),
-                                std::get<1>(COLOR_BUFF[p.second][p.first]),
-                                std::get<2>(COLOR_BUFF[p.second][p.first]),
-                                SDL_ALPHA_OPAQUE
-                                );
-
-                        SDL_RenderPoint(renderer, p.first, p.second);
-
+                    if(trunc(v1.x) == std::get<0>(coords.at(0))) // v1 is on the left
+                    {
+                        const float z = (1-line_factor) * v1.z + line_factor * v2.z; 
+                        const Color c = {
+                                .r = round((1-line_factor) * v1.r + line_factor * v2.r), 
+                                .g = round((1-line_factor) * v1.g + line_factor * v2.g), 
+                                .b = round((1-line_factor) * v1.b + line_factor * v2.b) 
+                        };
+                        std::get<2>(coords.at(i)) = z; 
+                        std::get<3>(coords.at(i)) = c; 
+                        // Here for if you want wireframe/line mode 
+                        if(z - z_fight_corr <= Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))]){
+                            Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = z;        
+                            COLOR_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = std::tuple(c.r, c.g, c.b);
                         }
-                        
-                        if(v2.x == coords.at(0).first){
-                         
-                        const auto p = coords.at(i);  
-                        COLOR_BUFF[p.second][p.first] = std::tuple(
-                                (1-factor) * v2.r + factor * v1.r, 
-                                (1-factor) * v2.g + factor * v1.g, 
-                                (1-factor) * v2.b + factor * v1.b 
-                        );
-                        SDL_SetRenderDrawColor(renderer,
-                                std::get<0>(COLOR_BUFF[p.second][p.first]),
-                                std::get<1>(COLOR_BUFF[p.second][p.first]),
-                                std::get<2>(COLOR_BUFF[p.second][p.first]),
-                                SDL_ALPHA_OPAQUE
-                                );
-                        SDL_RenderPoint(renderer, p.first, p.second);
-                        }
-                        
-                }
-            }
-                    /* scanline algorithm here!
-                    *
-                    *  - create dy+1 buckets
-                    *  - bucket sort those buckets based on x-coordinate
-                    *  - interpolate rows
-                   * */
-                
-               
-                 std::vector<std::vector<int>> buckets{};
-                 for(int i = 0; i < maxY - minY+1; i++){
-                     buckets.push_back({});
-                 }
-                 for(const std::pair<int, int> p : face_coords){
-                     buckets.at(p.second - minY).push_back(p.first);
-                 }
-
-                 //
-                 for(int i = 0; i < buckets.size(); i++){
-                    
-                    std::sort(
-                            buckets.at(i).begin(),
-                            buckets.at(i).end(),
-                            [](int x, int y){return x < y;}
-                            );
-                   // printVector(buckets.at(i)); 
-                 }
-                 
-                 //printColorBuff();
-                 // interpolate using leftmost and rightmost
-                 for(int j = 0 ; j  < buckets.size(); j++){
-                    const auto bucket = buckets.at(j);
-                    for(int i = 0; i < bucket.size(); i++){
-                       
-                        const float dx = bucket.at(bucket.size() - 1) - bucket.at(0);
-                        for(int k = 0; k < dx+1; k++){
-                            
-                            //std::cout << "k=" << k << '\n';
-                            // interpolate color
-                           
-                           //printVector(bucket); 
-                           float factor = k / dx; 
-                           
-                            
-                            
-
-                            
-                            
-                            //printColor(minY + j, bucket.at(0));
-                            //printColor(minY + j, bucket.at(bucket.size()-1));
-                            COLOR_BUFF[minY + j][bucket.at(0)+k] =
-                               std::tuple<float, float, float>{
-                                ((1-factor) * std::get<0>(COLOR_BUFF[minY + j][bucket.at(0)])) + (factor * std::get<0>(COLOR_BUFF[minY +j][bucket.at(bucket.size()-1)])), 
-                               
-                                ((1-factor) * std::get<1>(COLOR_BUFF[minY + j][bucket.at(0)])) + (factor * std::get<1>(COLOR_BUFF[minY +j][bucket.at(bucket.size()-1)])), 
-                              
-                                ((1-factor) * std::get<2>(COLOR_BUFF[minY + j][bucket.at(0)])) + (factor * std::get<2>(COLOR_BUFF[minY +j][bucket.at(bucket.size()-1)])), 
-                               } 
-                                ;
-                            //
-                            std::cout << factor << '\n'; 
-                            //printColor(minY + j, bucket.at(0));
-                            //printColor(minY + j, bucket.at(bucket.size()-1));
-                             
-                            
-                            
-                            
-                            //std::cout << "dy=" << buckets.size() << '\n';
-                            //std::cout << "(row, col)=" <<  "(" << (minY + j) << "," << (bucket.at(0))<< ")"<< '\n';
-                            
-                            // printVector(bucket);
-                            SDL_SetRenderDrawColor(renderer,
-                                //255,255,255, 
-                                std::get<0>(COLOR_BUFF[minY + j][bucket.at(0)+k]), 
-                                std::get<1>(COLOR_BUFF[minY + j][bucket.at(0)+k]), 
-                                std::get<2>(COLOR_BUFF[minY + j][bucket.at(0)+k]), 
-                                SDL_ALPHA_OPAQUE
-                            );
-                            
-                            SDL_RenderPoint(renderer, bucket.at(0)+k, minY + j);
-                        }
-                        
                     }
-                 }
-        }
-        /*
-        // render the 2 cube faces separately
-        for(int i = 0 ; i < faces.size(); i++){
-            for(int j = 0 ; j < faces.at(i).vts.size(); j++){
-                Vertex v1 = screen(project(faces.at(i).vts.at(j), FOV), W, H);
-                Vertex v2 = screen(project(faces.at(i).vts.at((j+1) % faces.at(i).vts.size()), FOV), W, H);
-                // SDL_RenderLine(renderer, v1.x, v1.y, v2.x, v2.y);
-                bresenham(renderer, Vertex{v1.x, v1.y} ,Vertex{v2.x, v2.y});
-            }
-        }
+                    
+                    else if(trunc(v2.x) == std::get<0>(coords.at(0))) // v2 is on the left
+                    {
+                        
+                        const float z = (1-line_factor) * v2.z + line_factor * v1.z; 
+                        const Color c = {
+                                .r = round((1-line_factor) * v2.r + line_factor * v1.r), 
+                                .g = round((1-line_factor) * v2.g + line_factor * v1.g), 
+                                .b = round((1-line_factor) * v2.b + line_factor * v1.b) 
+                        };
+                        std::get<2>(coords.at(i)) = z; 
+                        std::get<3>(coords.at(i)) = c; 
+                        if(z - z_fight_corr <= Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))]){
+                            Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = z;
+                            COLOR_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = std::tuple(c.r, c.g, c.b);
+                        }
+                   }
 
-        // connect the 2 cube faces
-        for(int i = 0; i < faces.at(0).vts.size(); i++){
-            Vertex v1 = screen(project(faces.at(0).vts.at(i), FOV), W, H);
-            Vertex v2 = screen(project(faces.at(1).vts.at(i), FOV), W, H);
-            //SDL_RenderLine(renderer, v1.x, v1.y, v2.x, v2.y);    
-            bresenham(renderer, Vertex{v1.x, v1.y} ,Vertex{v2.x, v2.y});
+                  // Will be used for filling the face
+                  face_coords.push_back(coords.at(i));  
+                } 
+                  
+
+            if (mode == FILL_MODE)
+            {
+               // 1 bucket for each y-coordinate that is crossed by some line of the face
+               // buckets contain <x, depth, color> of pixels crossed at that y
+               std::vector<std::vector<std::tuple<int, float, Color>>> buckets{}; // <x,z, Color>
+               for(int i = 0; i < maxY - minY + 1; i++){
+                    buckets.push_back({});
+               }
+               for(const std::tuple<int, int, float, Color> p : face_coords){
+                    buckets.at(std::get<1>(p) - minY).push_back(std::tuple<int, float, Color>{std::get<0>(p), std::get<2>(p), std::get<3>(p)});
+               }
+               
+               // Unwanted situations
+               if(buckets.size() == 0){
+                 std::cout << "RASTERIZATION ERR: no buckets made!\n"; 
+               }
+               if(buckets.size() == 1){
+                 std::cout << "RASTERIZATION INFO: all pixels have the same y!\n"; 
+               }
+               for(int bi = 0; bi < buckets.size() ; bi++){
+                  auto b = buckets.at(bi);
+                   if(b.size() == 0)
+                  {
+                      std::cout << "RASTERIZATION ERROR: bucket is empty (may cause black horizontal flashes)!\n";
+                      const int empty_y = bi + minY;
+                      std::cout << "(minY, maxY)=" << "(" << minY << ", " << maxY << ") -> empty bucket:" << empty_y << '\n';
+                      for(auto f : face_coords){
+                          if(std::get<1>(f) == empty_y){
+                            std::cout << std::get<1>(f) << " exists in face coordinates though" << '\n';
+                          }
+                      }
+                  }
+                  if(b.size() == 1)
+                  {
+                      //std::cout << "RASTERIZATION ERROR: bucket only has 1 element!\n";
+                      b.push_back(b.at(0));
+                  }
+               }
+
+               //
+               for(int j = 0; j < buckets.size(); j++){
+                    std::sort(
+                            buckets.at(j).begin(),
+                            buckets.at(j).end(),
+                            [](std::tuple<int, float, Color> x, std::tuple<int, float, Color> y){return std::get<0>(x) <= std::get<0>(y);}
+                        ); 
+               }
+                 
+               // Interpolate using leftmost and rightmost pxl values
+               for(int j = 0 ; j < buckets.size(); j++)
+               {
+                    const auto bucket = buckets.at(j);
+                    //printColor(bucket.at(0), minY);
+                    //printColor(bucket.at(bucket.size()-1), minY);
+                    //printColorBuff(true);
+                    for(int k = 0; k < bucket.size(); k++)
+                    {
+                        int x_left = std::get<0>(bucket.at(0));
+                        const int x_right = std::get<0>(bucket.at(bucket.size() - 1));
+                        const float dx = x_right - x_left;
+                        
+                        const float z_left = std::get<1>(bucket.at(0));
+                        const float z_right = std::get<1>(bucket.at(bucket.size() - 1));
+                        
+                        const Color c_left  = std::get<2>(bucket.at(0));
+                        const Color c_right = std::get<2>(bucket.at(bucket.size() - 1));
+
+                        for(int m = 0; m < dx+1; m++)
+                        {
+                            //
+                            // same factor used for both color and z
+                            float factor = m / dx;
+                            if(dx == 0){
+                                continue;
+                                //factor = 0;
+                            }
+                            
+                            // INTERPOLATE HERE! (requires the z-values along the wireframe of the face)
+                            //const float z = //(1-factor) * v2.z + line_factor * v1.z; 
+                            
+                            const float z = ((1-factor) * z_right) + (factor * z_left); 
+                            if(z < Z_BUFF[std::get<0>(bucket.at(0)) + m][minY + j]){
+                                Z_BUFF[std::get<0>(bucket.at(0)) + m][minY + j] = z;
+                            
+                                //std::cout << c_left.r << ", " << c_left.g << ", " << c_left.b << '\n'; 
+                            
+                                COLOR_BUFF[x_left + m][minY + j] = std::tuple(                               
+                                    round((1-factor) * c_left.r  + factor * c_right.r),
+                                    round((1-factor) * c_left.g  + factor * c_right.g),
+                                    round((1-factor) * c_left.b  + factor * c_right.b)
+                                 );
+                            }
+                            
+                            
+                            
+                            /*
+                            COLOR_BUFF[x_left + m][minY + j] = std::tuple(                               
+                                    c_left.r,
+                                    c_left.g,
+                                    c_left.b
+                            );
+                            */
+                            
+                           // do NOT use the value in the color buff (because it might not even be in the color buff if the z was too large)!!! 
+                           // use the left color value and right color value of the face instead
+                        
+
+                                
+                            /*        
+                            COLOR_BUFF[x_left + m][minY + j] = std::tuple(                               
+                                    round((1-factor) * std::get<0>(COLOR_BUFF[x_left][minY+j]) + factor * std::get<0>(COLOR_BUFF[x_right][minY+j])),
+                                    round((1-factor) * std::get<1>(COLOR_BUFF[x_left][minY+j]) + factor * std::get<1>(COLOR_BUFF[x_right][minY+j])),
+                                    round((1-factor) * std::get<2>(COLOR_BUFF[x_left][minY+j]) + factor * std::get<2>(COLOR_BUFF[x_right][minY+j]))
+                            );
+                            */
+                        } 
+                    } 
+                }
+           } // fill mode if
         } 
-       */ 
-       // 
-       //printProperties();
+      } 
     };
+
+    /**
+     *
+     * No clipping
+     * No visibility/depth testing
+     * No interpolation of color or location
+     * Wireframe only
+     *
+     * Assumes CCW coordinates
+     */
+    void safe_render(SDL_Renderer* renderer)
+    {
+        //
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE); // Black
+        //
+        for(Face f: faces){
+           for(int i = 0; i < f.vts.size(); i++){
+               Vertex v1 = screen(project(f.vts.at(i), FOV), W, H);
+               Vertex v2 = screen(project(f.vts.at((i+1) % f.vts.size()), FOV), W, H);
+               //SDL_RenderPoint(renderer, v1.x, v1.y);
+               SDL_RenderLine(renderer, v1.x, v1.y, v2.x, v2.y);
+           }
+        };
+    }
 };
 
 
-/*
-struct Cube : Geometry {
-    // Overload constructor 
-    Cube(std::vector<Face> faces_in) : Geometry(faces_in){};
-    Cube(std::vector<Vertex> vts_in) : Geometry(vts_in, 4){};    
-    //
-};
-*/
+// very inefficient, but useful to see what is actually in the buffer
+void render_COLOR_BUFF(SDL_Renderer* renderer){
 
+            for(int row = 0; row < H; row ++){
+                for(int col = 0; col < W; col++)
+                {
+                    SDL_SetRenderDrawColor(
+                            renderer, 
+                                std::get<0>(COLOR_BUFF[row][col]),
+                                std::get<1>(COLOR_BUFF[row][col]),
+                                std::get<2>(COLOR_BUFF[row][col]),
+                                SDL_ALPHA_OPAQUE
+                    );
+                    SDL_RenderPoint(renderer,row,col);
+                    //Z_BUFF[row][col] = 100; // just a big value. Anything bigger than 1 should suffice
+                }
+            } 
+}
 
+// render a depth map
+void render_Z_BUFF(SDL_Renderer* renderer){
+
+            for(int row = 0; row < H; row ++){
+                for(int col = 0; col < W; col++)
+                {
+                    SDL_SetRenderDrawColor(
+                            renderer, 
+                                std::clamp((int) round(Z_BUFF[row][col]), 0, 255),
+                                std::clamp((int) round(Z_BUFF[row][col]), 0, 255),
+                                std::clamp((int) round(Z_BUFF[row][col]), 0, 255),
+                                SDL_ALPHA_OPAQUE
+                    );
+                    SDL_RenderPoint(renderer,row,col);
+                    //Z_BUFF[row][col] = 100; // just a big value. Anything bigger than 1 should suffice
+                }
+            } 
+}
 
 // input in screen coordinates
 std::vector<std::pair<int, int>> bresenham(SDL_Renderer* renderer, Vertex p, Vertex q){
@@ -520,7 +579,6 @@ std::vector<std::pair<int, int>> bresenham(SDL_Renderer* renderer, Vertex p, Ver
 
          // std::cout << (p.x + i) << "-" << y << '\n';
       }
-      //filled.push_back(std::pair<int, int>{q.x, q.y});
   }
   }
 
@@ -560,10 +618,10 @@ std::vector<std::pair<int, int>> bresenham(SDL_Renderer* renderer, Vertex p, Ver
           D = D + 2*dx; 
 
       }
-      //filled.push_back(std::pair<int, int>{q.x, q.y});
   }
   }
   //
+  //std::cout << "Bresenham -> " << filled.size() << " coordinates!" << '\n';
   return filled;
 }
 
@@ -574,12 +632,19 @@ std::vector<std::pair<int, int>> bresenham(SDL_Renderer* renderer, Vertex p, Ver
 //
 int main(void){
 
+
     // SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
     SDL_Init(SDL_INIT_VIDEO);
     //   
     SDL_Window* window = SDL_CreateWindow("spinny cube", W, H, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
- 
+
+    /*Initialize buffers*/
+    for(int row = 0; row < H; row ++){
+        for(int col = 0; col < W; col++){
+            Z_BUFF[row][col] = 100; // just a big value. Anything bigger than 1 should suffice
+        }
+    } 
 
     /* 
      * Objects in scene (World coordinates)
@@ -588,11 +653,25 @@ int main(void){
     std::vector<Geometry> objects{};
 
     Geometry t1 = Geometry(std::vector<Vertex>{
-        {.x =   .5, .y =    0, .z =  1, .w = 1, .g = 255},
-        {.x =    0, .y =   .5, .z =  1, .w = 1, .r = 255},
-        {.x =  -.5, .y =    0, .z =  1, .w = 1, .b = 255}
+        {.x =    1, .y =     0, .z =  3.5, .w = 1, .r = 255, .g = 255, .b = 255},
+        {.x =    0, .y =    -1, .z =  3.5, .w = 1, .r = 255, .g = 255, .b = 255},
+        {.x =   -1, .y =     0, .z =  3.5, .w = 1, .r = 255, .g = 255, .b = 255}
     }, 3); 
     objects.push_back(t1);
+    
+    Geometry t2 = Geometry(std::vector<Vertex>{
+        {.x =    1, .y =     0, .z =  3, .w = 1, .r = 255},
+        {.x =    0, .y =    -1, .z =  3, .w = 1, .g = 255},
+        {.x =   -1, .y =     0, .z =  3, .w = 1, .b = 255}
+    }, 3); 
+    objects.push_back(t2);
+    
+    Geometry t3 = Geometry(std::vector<Vertex>{
+        {.x =    1, .y =     0, .z =  3, .w = 1, .r = 255},
+        {.x =    0, .y =    -1, .z =  3, .w = 1, .g = 255},
+        {.x =   -1, .y =     0, .z =  3, .w = 1, .b = 255}
+    }, 3); 
+    
     
     /*
      * Render loop
@@ -611,82 +690,62 @@ int main(void){
             // Reset screen to all black
             SDL_SetRenderDrawColor(renderer, 0, 0, 0,SDL_ALPHA_OPAQUE); // Black
             SDL_RenderClear(renderer);
+            for(int row = 0; row < H; row ++){
+                for(int col = 0; col < W; col++)
+                {
+                    COLOR_BUFF[row][col] = {};
+                    Z_BUFF[row][col] = 1000; // just a big value. Anything bigger than 1 should suffice
+                }
+            } 
      
             // Render scene
-            for(Geometry &g: objects)
-            {  
+            //for(Geometry &g: objects)
+            //{  
                  /*
                 * 1. Translate from world space to camera space
                 * 2. Apply transformations in camera space
                 * 3. Translate back to world space
                 */
                 
-                // [...]
+                t1.translate_geom(Vertex {.x = 0, .y = 0, .z = -6});                
+                t2.translate_geom(Vertex {.x = 0, .y = 0, .z = -4});                
+                
+                t1.rotate_geom( 1, Z_AXIS);                
+                t2.rotate_geom(-1, Z_AXIS);                
+                
+                t1.translate_geom(Vertex {.x = 0, .y = 0, .z = 6});                
+                t2.translate_geom(Vertex {.x = 0, .y = 0, .z = 4});                
 
                 /*  
                 * All transformations/mutations are done, simply render the vertices
                 */
                 
                 // g.printProperties();
-                g.render(renderer);
-                
-                      
-                 
-                
-
-                // Bresenham test lines
                 /*
-                // Q2 
-                bresenham(renderer, 
-                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
-                        Vertex {.x = 600, .y = 380, .z=1, .w=1}
-                );
-                // Q3
-                bresenham(renderer, 
-                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
-                        Vertex {.x = 600, .y = 420, .z=1, .w=1}
-                );
-                // Q6
-                bresenham(renderer, 
-                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
-                        Vertex {.x = 200, .y = 420, .z=1, .w=1}
-                );
-                // Q7
-                bresenham(renderer, 
-                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
-                        Vertex {.x = 200, .y = 380, .z=1, .w=1}
-                );
-                // Q1
-                bresenham(renderer, 
-                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
-                        Vertex {.x = 420, .y = 200, .z=1, .w=1}
-                );
-                // Q4
-                bresenham(renderer, 
-                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
-                        Vertex {.x = 420, .y = 600, .z=1, .w=1}
-                );
-                // Q5
-                bresenham(renderer, 
-                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
-                        Vertex {.x = 380, .y = 600, .z=1, .w=1}
-                );             
-                // Q8
-                bresenham(renderer, 
-                        Vertex {.x = 400, .y = 400, .z=1, .w=1},
-                        Vertex {.x = 380, .y = 200, .z=1, .w=1}
-                );
-                */
-          }
-          //
-          SDL_RenderPresent(renderer);
-          SDL_Delay(1000 / FPS);
+                 *
+                 * - Expected behavior if you render the geometry from furthest away to closest
+                 * - Unexpected behavior otherwise 
+                 *
+                 */
+                // blue (t2) should be closer
+                t2.render(renderer, FILL_MODE);
+                t1.render(renderer, FILL_MODE);
+
+                //t3.render(renderer, LINE_MODE);
+                //t1.safe_render(renderer);
+                render_COLOR_BUFF(renderer);
+                //render_Z_BUFF(renderer);
+                //
+                reset_Z_BUFF();
+            SDL_RenderPresent(renderer);
+            SDL_Delay(1000 / FPS);
     }
 
 
     // cleanup
     SDL_Quit();
     return 0;
-
-
 }
+
+
+
