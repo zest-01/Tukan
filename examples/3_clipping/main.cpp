@@ -34,6 +34,9 @@ void printColor(int row, int col);
 // only works if the elements are printable
 
 
+bool inScreen(int x, int y){
+    return 0 <= x && x < W && 0 <= y && y < H;
+}
 
 void reset_Z_BUFF(){
     for(int row = 0 ; row < H ; row++){
@@ -290,7 +293,6 @@ struct Geometry {
                     maxY = std::max(maxY, p.second); 
                 }
 
-                //
                 for(float i = 0; i < coords.size(); i++)
                 {
                     /*
@@ -300,6 +302,8 @@ struct Geometry {
                      */
                     const float line_factor = i / (coords.size() - 1);
                     const auto p = coords.at(i);   
+                    
+
 
                     if(trunc(v1.x) == std::get<0>(coords.at(0))) // v1 is on the left
                     {
@@ -311,10 +315,15 @@ struct Geometry {
                         };
                         std::get<2>(coords.at(i)) = z; 
                         std::get<3>(coords.at(i)) = c; 
+                        
+
                         // Here for if you want wireframe/line mode 
-                        if(z - z_fight_corr <= Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))]){
-                            Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = z;        
-                            COLOR_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = Color{c.r, c.g, c.b};
+                            
+                        if(inScreen(std::get<0>(p), std::get<1>(p))){
+                            if(z - z_fight_corr <= Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))]){
+                                Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = z;        
+                                COLOR_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = Color{c.r, c.g, c.b};
+                            }
                         }
                     }
                     
@@ -329,18 +338,25 @@ struct Geometry {
                         };
                         std::get<2>(coords.at(i)) = z; 
                         std::get<3>(coords.at(i)) = c; 
-                        if(z - z_fight_corr <= Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))]){
-                            Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = z;
-                            COLOR_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = Color{c.r, c.g, c.b};
+                        
+                       
+                        if(inScreen(std::get<0>(p), std::get<1>(p))){
+                            if(z - z_fight_corr <= Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))]){
+                                Z_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = z;
+                                COLOR_BUFF[std::get<0>(coords.at(i))][std::get<1>(coords.at(i))] = Color{c.r, c.g, c.b};
+                            }
                         }
                    }
 
                   // Will be used for filling the face
-                  face_coords.push_back(coords.at(i));  
+                  face_coords.push_back(coords.at(i));
+                  //std::cout << std::get<0>(coords.at(i)) << '\n';  
+                  //std::cout << v1.x << '\n';  
                 } 
             }
+            //return;
 
-
+            
             if (mode == FILL_MODE)
             {
                // 1 bucket for each y-coordinate that is crossed by some line of the face
@@ -349,11 +365,13 @@ struct Geometry {
                for(int i = 0; i < maxY - minY + 1; i++){
                     buckets.push_back({});
                }
+
                for(const std::tuple<int, int, float, Color> p : face_coords){
                     buckets.at(std::get<1>(p) - minY).push_back(std::tuple<int, float, Color>{std::get<0>(p), std::get<2>(p), std::get<3>(p)});
                }
                
                
+
                // Unwanted situations
                if(buckets.size() == 0){
                  std::cout << "RASTERIZATION ERR: no buckets made!\n"; 
@@ -376,7 +394,7 @@ struct Geometry {
                   }
                   if(b.size() == 1)
                   {
-                      //std::cout << "RASTERIZATION ERROR: bucket only has 1 element!\n";
+                      std::cout << "RASTERIZATION INFO: bucket only has 1 element!\n";
                       b.push_back(b.at(0));
                   }
                }
@@ -394,22 +412,33 @@ struct Geometry {
                // Interpolate using leftmost and rightmost pxl values
                for(int j = 0 ; j < buckets.size(); j++)
                {
+
                     const auto bucket = buckets.at(j);
-                    //printColor(bucket.at(0), minY);
-                    //printColor(bucket.at(bucket.size()-1), minY);
-                    //printColorBuff(true);
+                    
+                    if(bucket.size() == 0){
+                        continue;
+                    }
+
+                    int x_left = std::get<0>(bucket.at(0));
+                    int x_right = std::get<0>(bucket.at(bucket.size() - 1));
+                    const float dx = x_right - x_left;
+                 
+                //    
+
+                    const float z_left = std::get<1>(bucket.at(0));
+                    const float z_right = std::get<1>(bucket.at(bucket.size() - 1));
+                        
+                    const Color c_left  = std::get<2>(bucket.at(0));
+                    const Color c_right = std::get<2>(bucket.at(bucket.size() - 1)); // has no color if gone off-screen?
+                    
+                    std::cout << "(minY, maxY)=" << "(" << minY << ", " << maxY << ")" << '\n';
+                    std::cout << "(minX, maxX)=" << "(" << x_left << ", " << x_right << ")" << '\n';
+                    //std::cout << (c_left.r + c_left.b + c_left.g) << '\n';
+                    //std::cout << (c_right.r + c_right.b + c_right.g) << '\n';
+                    std::cout << minY + j << '\n';
+
                     for(int k = 0; k < bucket.size(); k++)
                     {
-                        int x_left = std::get<0>(bucket.at(0));
-                        const int x_right = std::get<0>(bucket.at(bucket.size() - 1));
-                        const float dx = x_right - x_left;
-                        
-                        const float z_left = std::get<1>(bucket.at(0));
-                        const float z_right = std::get<1>(bucket.at(bucket.size() - 1));
-                        
-                        const Color c_left  = std::get<2>(bucket.at(0));
-                        const Color c_right = std::get<2>(bucket.at(bucket.size() - 1));
-
                         for(int m = 0; m < dx+1; m++)
                         {
                             //
@@ -417,9 +446,13 @@ struct Geometry {
                             float factor = m / dx;
                             if(dx == 0){
                                 continue;
-                                //factor = 0;
                             }
-                            
+
+                            if(!inScreen(x_left+m, minY + j)){
+                                continue;
+                            }
+
+                             
                             // INTERPOLATE HERE! (requires the z-values along the wireframe of the face)
                             //const float z = //(1-factor) * v2.z + line_factor * v1.z; 
                             
@@ -508,6 +541,7 @@ void render_Z_BUFF(SDL_Renderer* renderer){
 }
 
 // input in screen coordinates
+// assumes both vertices are on the screen (i.e., not OOB)
 std::vector<std::pair<int, int>> bresenham(SDL_Renderer* renderer, Vertex p, Vertex q){
   //
   std::vector<std::pair<int, int>> filled{};
@@ -543,6 +577,7 @@ std::vector<std::pair<int, int>> bresenham(SDL_Renderer* renderer, Vertex p, Ver
       for(int i = 0; i < dx; i++)
       {
           //SDL_RenderPoint(renderer, p.x + i, y);
+          // off-screen
           filled.push_back(std::pair<int,int>{p.x+i, y});
           if(D >= 0){
               y = y - dir;
@@ -583,6 +618,7 @@ std::vector<std::pair<int, int>> bresenham(SDL_Renderer* renderer, Vertex p, Ver
       for(int i = 0; i < dy; i++)
       {
           //SDL_RenderPoint(renderer, x, p.y + i);
+
           filled.push_back(std::pair<int,int>{x, p.y + i});
           if(D >= 0){
               x = x - dir;
@@ -609,7 +645,7 @@ int main(void){
     // SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
     SDL_Init(SDL_INIT_VIDEO);
     //   
-    SDL_Window* window = SDL_CreateWindow("Solar System", W, H, 0);
+    SDL_Window* window = SDL_CreateWindow("Clippy", W, H, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
 
     /*Initialize buffers*/
@@ -646,8 +682,8 @@ int main(void){
     }, 3); 
     
     Geometry earth = Geometry(std::vector<Vertex>{
-        {.x =    .5, .y =     .5, .z =  3, .w = 1, .b = 255},
-        {.x =    .5, .y =    -.5, .z =  3, .w = 1, .b = 255},
+        {.x =    .5, .y =     .5, .z =  3, .w = 1, .r = 255},
+        {.x =    .5, .y =    -.5, .z =  3, .w = 1, .g = 255},
         {.x =   -.5, .y =    -.5, .z =  3, .w = 1, .b = 255},
         {.x =   -.5, .y =     .5, .z =  3, .w = 1, .b = 255}
     }, 4); 
@@ -698,15 +734,9 @@ int main(void){
               */  
 
                 //
-                const float ez = 3;
-                earth.translate_geom(Vertex {.x = 0, .y = 0, .z = -ez});                
-                earth.rotate_geom(1, Y_AXIS);                
-                earth.translate_geom(Vertex {.x = 0, .y = 0, .z = +ez});                
-
-                const float mz = 3;
-                moon.translate_geom(Vertex {.x = 0, .y = 0, .z = -mz});                
-                moon.rotate_geom(3, Y_AXIS);                
-                moon.translate_geom(Vertex {.x = 0, .y = 0, .z = +mz});                
+                //
+                earth.translate_geom(Vertex {.x = 0.0, .y = -0.1, .z = 0});                
+                
                 /*  
                 * All transformations/mutations are done, simply render the vertices
                 */
@@ -725,7 +755,7 @@ int main(void){
                 //t3.render(renderer, LINE_MODE);
                 
                 earth.render(renderer, FILL_MODE);
-                moon.render(renderer, FILL_MODE);
+                //moon.render(renderer, FILL_MODE);
                 
                 // use safe_render to test these buffer functions for performance
                 render_COLOR_BUFF(renderer); // Slowest function we have, but it is constant in the amount of geometry.
@@ -734,7 +764,7 @@ int main(void){
                 reset_COLOR_BUFF();
                 
             SDL_RenderPresent(renderer);
-            //SDL_Delay(1000 / FPS);
+            SDL_Delay(1000 / FPS);
     }
 
 

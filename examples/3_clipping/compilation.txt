@@ -1,0 +1,1 @@
+g++ main.cpp matrix.cpp -I ../../SDL/include/ -L ../../SDL/build/ -lSDL3 -o  clippy
