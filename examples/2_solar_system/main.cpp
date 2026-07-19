@@ -12,6 +12,7 @@
 #include <utility>
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 //
 #define WIREFRAME_MODE  0
@@ -38,6 +39,13 @@ void reset_Z_BUFF(){
     for(int row = 0 ; row < H ; row++){
         for(int col = 0; col < H ; col++){
             Z_BUFF[row][col] = 255;
+        }
+    }
+}
+void reset_COLOR_BUFF(){
+    for(int row = 0 ; row < H ; row++){
+        for(int col = 0; col < H ; col++){
+            COLOR_BUFF[row][col] = std::tuple<int,int,int>{};
         }
     }
 }
@@ -345,7 +353,8 @@ struct Geometry {
                   // Will be used for filling the face
                   face_coords.push_back(coords.at(i));  
                 } 
-                  
+            }
+
 
             if (mode == FILL_MODE)
             {
@@ -358,6 +367,7 @@ struct Geometry {
                for(const std::tuple<int, int, float, Color> p : face_coords){
                     buckets.at(std::get<1>(p) - minY).push_back(std::tuple<int, float, Color>{std::get<0>(p), std::get<2>(p), std::get<3>(p)});
                }
+               
                
                // Unwanted situations
                if(buckets.size() == 0){
@@ -391,10 +401,11 @@ struct Geometry {
                     std::sort(
                             buckets.at(j).begin(),
                             buckets.at(j).end(),
-                            [](std::tuple<int, float, Color> x, std::tuple<int, float, Color> y){return std::get<0>(x) <= std::get<0>(y);}
+                            [](std::tuple<int, float, Color> x, std::tuple<int, float, Color> y){return std::get<0>(x) < std::get<0>(y);}
                         ); 
                }
-                 
+            
+
                // Interpolate using leftmost and rightmost pxl values
                for(int j = 0 ; j < buckets.size(); j++)
                {
@@ -439,34 +450,12 @@ struct Geometry {
                                     round((1-factor) * c_left.b  + factor * c_right.b)
                                  );
                             }
-                            
-                            
-                            
-                            /*
-                            COLOR_BUFF[x_left + m][minY + j] = std::tuple(                               
-                                    c_left.r,
-                                    c_left.g,
-                                    c_left.b
-                            );
-                            */
-                            
-                           // do NOT use the value in the color buff (because it might not even be in the color buff if the z was too large)!!! 
-                           // use the left color value and right color value of the face instead
-                        
-
-                                
-                            /*        
-                            COLOR_BUFF[x_left + m][minY + j] = std::tuple(                               
-                                    round((1-factor) * std::get<0>(COLOR_BUFF[x_left][minY+j]) + factor * std::get<0>(COLOR_BUFF[x_right][minY+j])),
-                                    round((1-factor) * std::get<1>(COLOR_BUFF[x_left][minY+j]) + factor * std::get<1>(COLOR_BUFF[x_right][minY+j])),
-                                    round((1-factor) * std::get<2>(COLOR_BUFF[x_left][minY+j]) + factor * std::get<2>(COLOR_BUFF[x_right][minY+j]))
-                            );
-                            */
                         } 
                     } 
                 }
+               //
            } // fill mode if
-        } 
+         
       } 
     };
 
@@ -488,7 +477,7 @@ struct Geometry {
            for(int i = 0; i < f.vts.size(); i++){
                Vertex v1 = screen(project(f.vts.at(i), FOV), W, H);
                Vertex v2 = screen(project(f.vts.at((i+1) % f.vts.size()), FOV), W, H);
-               //SDL_RenderPoint(renderer, v1.x, v1.y);
+               // SDL_RenderPoint(renderer, v1.x, v1.y);
                SDL_RenderLine(renderer, v1.x, v1.y, v2.x, v2.y);
            }
         };
@@ -636,7 +625,7 @@ int main(void){
     // SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
     SDL_Init(SDL_INIT_VIDEO);
     //   
-    SDL_Window* window = SDL_CreateWindow("spinny cube", W, H, 0);
+    SDL_Window* window = SDL_CreateWindow("Solar System", W, H, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
 
     /*Initialize buffers*/
@@ -672,6 +661,19 @@ int main(void){
         {.x =   -1, .y =     0, .z =  3, .w = 1, .b = 255}
     }, 3); 
     
+    Geometry earth = Geometry(std::vector<Vertex>{
+        {.x =    .5, .y =     .5, .z =  3, .w = 1, .b = 255},
+        {.x =    .5, .y =    -.5, .z =  3, .w = 1, .b = 255},
+        {.x =   -.5, .y =    -.5, .z =  3, .w = 1, .b = 255},
+        {.x =   -.5, .y =     .5, .z =  3, .w = 1, .b = 255}
+    }, 4); 
+    
+    Geometry moon = Geometry(std::vector<Vertex>{
+        {.x =    .1, .y =     .1, .z =  5, .w = 1, .r = 255, .g = 255, .b = 255},
+        {.x =    .1, .y =    -.1, .z =  5, .w = 1, .r = 255, .g = 255, .b = 255},
+        {.x =   -.1, .y =    -.1, .z =  5, .w = 1, .r = 255, .g = 255, .b = 255},
+        {.x =   -.1, .y =     .1, .z =  5, .w = 1, .r = 255, .g = 255, .b = 255}
+    }, 4); 
     
     /*
      * Render loop
@@ -690,14 +692,7 @@ int main(void){
             // Reset screen to all black
             SDL_SetRenderDrawColor(renderer, 0, 0, 0,SDL_ALPHA_OPAQUE); // Black
             SDL_RenderClear(renderer);
-            for(int row = 0; row < H; row ++){
-                for(int col = 0; col < W; col++)
-                {
-                    COLOR_BUFF[row][col] = {};
-                    Z_BUFF[row][col] = 1000; // just a big value. Anything bigger than 1 should suffice
-                }
-            } 
-     
+            
             // Render scene
             //for(Geometry &g: objects)
             //{  
@@ -715,7 +710,18 @@ int main(void){
                 
                 t1.translate_geom(Vertex {.x = 0, .y = 0, .z = 6});                
                 t2.translate_geom(Vertex {.x = 0, .y = 0, .z = 4});                
+                
 
+                //
+                const float ez = 3;
+                earth.translate_geom(Vertex {.x = 0, .y = 0, .z = -ez});                
+                earth.rotate_geom(1, Y_AXIS);                
+                earth.translate_geom(Vertex {.x = 0, .y = 0, .z = +ez});                
+
+                const float mz = 3;
+                moon.translate_geom(Vertex {.x = 0, .y = 0, .z = -mz});                
+                moon.rotate_geom(3, Y_AXIS);                
+                moon.translate_geom(Vertex {.x = 0, .y = 0, .z = +mz});                
                 /*  
                 * All transformations/mutations are done, simply render the vertices
                 */
@@ -728,15 +734,20 @@ int main(void){
                  *
                  */
                 // blue (t2) should be closer
-                t2.render(renderer, FILL_MODE);
-                t1.render(renderer, FILL_MODE);
-
+                //t2.render(renderer, FILL_MODE);
+                //t1.render(renderer, FILL_MODE);
+                //c1.safe_render(renderer);
                 //t3.render(renderer, LINE_MODE);
+                earth.render(renderer, FILL_MODE);
+                moon.render(renderer, FILL_MODE);
+
                 //t1.safe_render(renderer);
-                render_COLOR_BUFF(renderer);
                 //render_Z_BUFF(renderer);
+                render_COLOR_BUFF(renderer);
+                
                 //
                 reset_Z_BUFF();
+                reset_COLOR_BUFF();
             SDL_RenderPresent(renderer);
             SDL_Delay(1000 / FPS);
     }
