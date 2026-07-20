@@ -15,6 +15,33 @@ void printVertices(std::vector<Vertex> vts){
 }
 
 
+float norm(Vertex v){
+    float norm = std::sqrt(
+              std::pow(v.x,2)
+            + std::pow(v.y,2)
+            + std::pow(v.z,2)
+            );
+    /*
+    std::cout << "x: " << std::pow(v.x,2) << '\n';
+    std::cout << "y: " << std::pow(v.y,2) << '\n';
+    sitd::cout << "z: " << std::pow(v.z,2) << '\n';
+    std::cout << "norm=" << norm << '\n';
+    */
+    return norm;
+}
+
+
+void restoreNorm(Vertex v, float desiredNorm){
+    float curr_norm = norm(v);
+    
+    // Comment this out and comment the norm in to see the FP errors accumulate in real time ;)
+    v.x = v.x / (curr_norm / desiredNorm);
+    v.y = v.y / (curr_norm / desiredNorm);
+    v.z = v.z / (curr_norm / desiredNorm);
+    //std::cout << "restored norm from: " << curr_norm << " to" << norm(v) << '\n';
+
+}
+
 Vertex Vertex::copy(){
     return Vertex{
         .x = x,
@@ -38,10 +65,13 @@ void Vertex::printProperties(){
 // positive angle for CCW, negative angle for CCWi
 Vertex rot(Vertex v, int angle, int axis){
   float rad = (angle % 360) * PI / 180;
+  float desiredNorm = norm(v);
+  Vertex v_out = v.copy();
 
-  // rotate around y-axis
+  
   switch(axis){
-    case X_AXIS:
+    
+      case X_AXIS:
        {
       float mat[4][4] {
         {1,             0,                0, 0},
@@ -49,9 +79,12 @@ Vertex rot(Vertex v, int angle, int axis){
         {0, std::sin(rad),    std::cos(rad), 0},
         {0,           0,                  0, 1}
       };
-      return mul(v, mat);
+        v_out = mul(v_out, mat);
+        restoreNorm(v_out, desiredNorm);
+        return v_out;
         break;
        }
+    
     case Y_AXIS:
        {
       float mat[4][4] {
@@ -60,9 +93,13 @@ Vertex rot(Vertex v, int angle, int axis){
         {-1*std::sin(rad), 0, std::cos(rad), 0},
         {               0, 0,             0, 1}
       }; 
-      return mul(v, mat);
+        v_out = mul(v_out, mat);
+        restoreNorm(v_out, desiredNorm);
+        return v_out;
         break;
        }
+    
+       
     case Z_AXIS:
       {
       float mat[4][4] {
@@ -70,15 +107,19 @@ Vertex rot(Vertex v, int angle, int axis){
         {std::sin(rad),    std::cos(rad), 0,0},
         {            0,                0, 1,0},
         {            0,                0, 0,1}
-      }; 
-      return mul(v, mat);
+      };
+        v_out = mul(v_out, mat);
+        restoreNorm(v_out, desiredNorm);
+        return v_out;
       break;
       }
     default: {
         std:: cout << "INVALID AXIS" << '\n';
         return v;
      }
+     
   }
+
   return v;
 }
 
@@ -108,7 +149,7 @@ void printMatrix(float mat[4][4]){
     }
 }
 
-//
+
 Vertex mul(Vertex v, float mat[4][4]){
     // 
     Vertex v_t = {.x = v.x, .y = v.y, .z = v.z, .w = v.w};

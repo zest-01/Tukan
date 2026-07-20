@@ -1,4 +1,5 @@
 #include <vector>
+#include <math.h>
 #define X_AXIS  0
 #define Y_AXIS  1
 #define Z_AXIS  2
@@ -28,6 +29,8 @@ struct Color {
     int b; //= 255;
 };
 
+float norm(Vertex v);
+void restoreNorm(float desiredNorm);
 
 void printVertices(std::vector<Vertex> vts); 
 Vertex rot(Vertex v, int angle, int axis);
